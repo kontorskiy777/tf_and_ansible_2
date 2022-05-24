@@ -1,0 +1,60 @@
+---
+    - name: install apache php git
+      apt:
+        name: "{{ packages }}"
+        state: present
+      vars:
+        packages:
+        - mariadb-server
+        - python-pymysql
+        - git
+
+    - name: set 50-server.cnf
+      template:
+        src: "files/50-server.cnf.j2"
+        dest: "/etc/mysql/mariadb.conf.d/50-server.cnf"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: create mysql remote user
+      mysql_user:
+        name: "{{ mysql_user }}"
+        password: "{{ mysql_root_password }}"
+        priv: '*.*:ALL'
+        host: '%'
+        state: present
+        check_implicit_admin: true
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+
+    - name: clone repo
+      git:
+        repo: https://github.com/FaztWeb/php-mysql-crud.git
+        dest: /tmp/git
+        force: yes
+        clone: yes
+        update: yes
+
+    - name: remove the existing database
+      mysql_db:
+        name: php_mysql_crud
+        state: absent
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        login_host: localhost
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: import the database
+      mysql_db:
+        name: all
+        state: import
+        target: /tmp/git/database/script.sql
+        login_unix_socket: /var/run/mysqld/mysqld.sock
+        login_host: localhost
+        login_user: root
+        login_password: "{{ mysql_root_password }}"
+
+    - name: restart mariadb
+      service:
+        name: mariadb
+        state: restarted
